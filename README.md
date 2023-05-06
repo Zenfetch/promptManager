@@ -10,6 +10,7 @@ in a `generated_prompts` folder as protobuf files which can easily be read by yo
 - Save and remove prompts easily
 - See how many tokens are included in your prompt
 
+![](https://github.com/Zenfetch/promptManager/blob/main/PromptManager.gif)
 
 ## Release Notes
 
