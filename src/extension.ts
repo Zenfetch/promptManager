@@ -28,6 +28,8 @@ export function activate(context: vscode.ExtensionContext) {
 						const result = await vscode.window.showWarningMessage('Are you sure you want to delete this prompt?', { modal: true }, 'Yes', 'No');
 						if (result === 'Yes') {
 							panel.webview.postMessage({ command: 'removePromptConfirmed', wrapperId: message.wrapperId });
+							// Delete the respective file
+							deletePromptFile(message.promptId);
 						}
 						break;
 					}
@@ -50,6 +52,28 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(vscode.commands.registerCommand('promptmanager.helloWorld', () => {
         vscode.window.showInformationMessage('Hello from promptManager!');
     }));
+}
+
+async function deletePromptFile(promptId: string) {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders && workspaceFolders.length > 0) {
+        const generatedPromptsPath = path.join(workspaceFolders[0].uri.fsPath, 'generated_prompts');
+        if (fs.existsSync(generatedPromptsPath)) {
+            const filePath = path.join(generatedPromptsPath, `${promptId}.pb`);
+            if (fs.existsSync(filePath)) {
+				console.log(`The filepath is ${filePath}`);
+                try {
+                    fs.unlinkSync(filePath);
+                    vscode.window.showInformationMessage('Prompt file deleted successfully');
+                } catch (error) {
+                    const errorMessage = (error as Error)?.message || 'Unknown error';
+                    vscode.window.showErrorMessage('Error deleting prompt file: ' + errorMessage);
+                }
+            }
+        }
+    } else {
+        vscode.window.showErrorMessage('No workspace folder found');
+    }
 }
 
 async function loadExistingPrompts(panel: vscode.WebviewPanel) {
@@ -286,7 +310,7 @@ function getWebviewContent(): string {
 					});
 				}
 
-				function createPromptSection(promptId = generateUUID(), titleText = '', inputText = '', variableNames = []) {
+				function createPromptSection(promptId = generateUUID(), titleText = '', inputText = '', variableNames = [], tokenCount = 0) {
 					const variableContainerId = 'variables-' + promptId;
 				
 					const promptContainer = document.getElementById('promptContainer');
@@ -327,19 +351,22 @@ function getWebviewContent(): string {
 					const removeButton = document.createElement('button');
 					removeButton.innerText = 'Remove Prompt';
 					removeButton.classList.add('remove-btn');
-				
-					removeButton.addEventListener('click', () => {
+
+					// Create a named function for the removeButton click event
+					const handleRemoveButtonClick = () => {
 						const data = {
 							command: 'removePrompt',
 							promptId: promptId,
 							wrapperId: wrapper.id
 						};
 						vscodeApi.postMessage(data, '*');
-					});
+					};
+
+					removeButton.addEventListener('click', handleRemoveButtonClick);				
 				
 					const tokenCountElement = document.createElement('p');
 					tokenCountElement.classList.add('token-count');
-					tokenCountElement.textContent = 'Tokens: 0';
+					tokenCountElement.textContent = 'Tokens: ' + tokenCount;
 				
 					textarea.addEventListener('input', (event) => {
 						const inputText = event.target.value;
@@ -423,9 +450,9 @@ function getWebviewContent(): string {
 							break;
 						}
 						case 'preloadPrompt': {
-							const { id, title, content, variables } = message.promptData;
-							createPromptSection(id, title, content, variables);
-							hasPreloadedPrompts = true; // Add this line
+							const { id, title, content, variables, tokenCount } = message.promptData;
+							createPromptSection(id, title, content, variables, tokenCount);
+							hasPreloadedPrompts = true;
 							break;
 						}
 					}
