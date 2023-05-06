@@ -1,6 +1,9 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
+import {load, Root, Type} from 'protobufjs';
 const {encode} = require('gpt-3-encoder');
 
 export function activate(context: vscode.ExtensionContext) {
@@ -19,7 +22,7 @@ export function activate(context: vscode.ExtensionContext) {
 			async message => {
 				switch (message.command) {
 					case 'save':
-						handleInput(message.text, message.promptId, panel);
+						handleInput(message.text, message.promptId, message.title, message.variableNames, panel);
 						return;
 					case 'removePrompt': {
 						const result = await vscode.window.showWarningMessage('Are you sure you want to delete this prompt?', { modal: true }, 'Yes', 'No');
@@ -28,13 +31,19 @@ export function activate(context: vscode.ExtensionContext) {
 						}
 						break;
 					}
+					case 'webviewReady': {
+						loadExistingPrompts(panel);
+						break;
+					}
 				}
 			},
 			undefined,
 			context.subscriptions
 		);
-		
+			
 		panel.webview.html = getWebviewContent();
+
+		// loadExistingPrompts(panel); // Add this line
 		
     }));
 
@@ -43,10 +52,46 @@ export function activate(context: vscode.ExtensionContext) {
     }));
 }
 
-function handleInput(input: string, promptId: string, panel: vscode.WebviewPanel) {
+async function loadExistingPrompts(panel: vscode.WebviewPanel) {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders && workspaceFolders.length > 0) {
+        const generatedPromptsPath = path.join(workspaceFolders[0].uri.fsPath, 'generated_prompts');
+        if (fs.existsSync(generatedPromptsPath)) {
+            const protoPath = path.join(__dirname, '..', 'resources', 'prompt.proto');
+            const root = await load(protoPath);
+            const promptType = root.lookupType('promptmanager.Prompt');
+
+            const files = fs.readdirSync(generatedPromptsPath);
+            for (const file of files) {
+                if (path.extname(file) === '.pb') {
+                    const buffer = fs.readFileSync(path.join(generatedPromptsPath, file));
+                    const message = promptType.decode(buffer);
+                    const promptData = promptType.toObject(message);
+
+                    panel.webview.postMessage({
+                        command: 'preloadPrompt',
+                        promptData: promptData
+                    });
+                }
+            }
+        }
+    } else {
+        vscode.window.showErrorMessage('No workspace folder found');
+    }
+}
+
+async function handleInput(input: string, promptId: string, title: string, variableNames: string[], panel: vscode.WebviewPanel) {
     const encoded = encode(input);
     const tokenCount = encoded.length;
     vscode.window.showInformationMessage(`You entered: ${input} for promptId: ${promptId} with ${tokenCount} tokens`);
+
+    try {
+        await saveProtobufFile(promptId, title, input, variableNames, tokenCount);
+        vscode.window.showInformationMessage('Protobuf file saved successfully');
+    } catch (error) {
+		const errorMessage = (error as Error)?.message || 'Unknown error';
+		vscode.window.showErrorMessage('Error saving protobuf file: ' + errorMessage);
+	}
 
     // Send token count back to the webview
     panel.webview.postMessage({
@@ -62,6 +107,42 @@ function generateUUID() {
 			v = c === 'x' ? r : (r & 0x3 | 0x8);
 		return v.toString(16);
 	});
+}
+
+async function saveProtobufFile(promptId: string, title: string, input: string, variableNames: string[], tokenCount: number) {
+    const protoPath = path.join(__dirname, '..', 'resources', 'prompt.proto');
+    const root = await load(protoPath);
+    const promptType = root.lookupType('promptmanager.Prompt');
+
+    const payload = {
+        id: promptId,
+        title: title,
+        content: input,
+        variables: variableNames,
+		tokenCount: tokenCount
+    };
+
+    const errMsg = promptType.verify(payload);
+    if (errMsg) {
+        throw Error(errMsg);
+    }
+
+    const message = promptType.create(payload);
+    const buffer = promptType.encode(message).finish();
+
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders && workspaceFolders.length > 0) {
+        const generatedPromptsPath = path.join(workspaceFolders[0].uri.fsPath, 'generated_prompts');
+        if (!fs.existsSync(generatedPromptsPath)) {
+			console.log('Created a new folder for the generatedPromptsPath');
+            fs.mkdirSync(generatedPromptsPath);
+        }
+
+		console.log('Writing the prompt proto!');
+        fs.writeFileSync(path.join(generatedPromptsPath, `${promptId}.pb`), buffer);
+    } else {
+        vscode.window.showErrorMessage('No workspace folder found');
+    }
 }
 
 function getWebviewContent(): string {
@@ -163,7 +244,7 @@ function getWebviewContent(): string {
             <script>
 				const vscodeApi = window.acquireVsCodeApi();
 
-                let promptCount = 0;
+				let hasPreloadedPrompts = false;
 
                 function createVariableList(variableNames, container, listId) {
 					const list = document.getElementById(listId);
@@ -182,7 +263,7 @@ function getWebviewContent(): string {
 				
 				const generateUUID = ${generateUUID.toString()};
 				
-				function handleVariableInputs(text, container, listId, tokenCountElement) {
+				function handleVariableInputs(text, listId, tokenCountElement) {
 					const regex = /{{(.*?)}}/g;
 					const variableNames = new Set();
 				
@@ -191,13 +272,21 @@ function getWebviewContent(): string {
 						variableNames.add(match[1].trim());
 					}
 				
-					createVariableList(Array.from(variableNames), container, listId);
+					const list = document.getElementById(listId);
+				
+					// Clear existing content
+					while (list.firstChild) {
+						list.removeChild(list.firstChild);
+					}
+				
+					Array.from(variableNames).forEach(variableName => {
+						const listItem = document.createElement('li');
+						listItem.innerText = variableName;
+						list.appendChild(listItem);
+					});
 				}
-				
-				
 
-                function createPromptSection() {
-					const promptId = generateUUID(); // Replace with the UUID generator function
+				function createPromptSection(promptId = generateUUID(), titleText = '', inputText = '', variableNames = []) {
 					const variableContainerId = 'variables-' + promptId;
 				
 					const promptContainer = document.getElementById('promptContainer');
@@ -220,6 +309,7 @@ function getWebviewContent(): string {
 					const titleInput = document.createElement('input');
 					titleInput.type = 'text';
 					titleInput.placeholder = 'Enter title';
+					titleInput.value = titleText;
 				
 					const idLabel = document.createElement('p');
 					idLabel.classList.add('prompt-id');
@@ -228,10 +318,11 @@ function getWebviewContent(): string {
 				
 					const textarea = document.createElement('textarea');
 					textarea.placeholder = 'Enter Prompt';
+					textarea.value = inputText;
 				
 					const saveButton = document.createElement('button');
 					saveButton.innerText = 'Save';
-					saveButton.classList.add('save-btn'); // Add this line
+					saveButton.classList.add('save-btn');
 				
 					const removeButton = document.createElement('button');
 					removeButton.innerText = 'Remove Prompt';
@@ -249,36 +340,40 @@ function getWebviewContent(): string {
 					const tokenCountElement = document.createElement('p');
 					tokenCountElement.classList.add('token-count');
 					tokenCountElement.textContent = 'Tokens: 0';
-
-
+				
 					textarea.addEventListener('input', (event) => {
 						const inputText = event.target.value;
 						const variableContainer = document.getElementById(variableContainerId);
-						handleVariableInputs(inputText, variableContainer, 'variable-list-' + promptId, tokenCountElement);
-					});             
+						handleVariableInputs(inputText, variableContainerId, tokenCountElement);
+					});
 				
 					saveButton.addEventListener('click', () => {
 						const inputText = textarea.value;
+						const titleText = titleInput.value;
+						const matches = textarea.value.match(/{{(.*?)}}/g);
+						const variableNames = matches ? Array.from(new Set(matches.map(match => match.slice(2, -2).trim()))) : [];
 						vscodeApi.postMessage({
 							command: 'save',
 							text: inputText,
-							promptId: promptId
+							title: titleText,
+							promptId: promptId,
+							variableNames: variableNames
 						});
 					});
 				
-					const variableContainer = document.createElement('div');  
-                    variableContainer.id = variableContainerId;  
-                    variableContainer.classList.add('variable-container');  
-                   
-                    const variableTitle = document.createElement('h3');  
-                    variableTitle.innerText = 'Variables';
-                   
-                    const list = document.createElement('ul');
-                    list.id = 'variable-list-' + promptId;
-                    
-                    right.appendChild(variableTitle);  
-                    right.appendChild(list);
-                    right.appendChild(variableContainer); 
+					const variableContainer = document.createElement('div');
+					variableContainer.id = variableContainerId;
+					variableContainer.classList.add('variable-container');
+				
+					const variableTitle = document.createElement('h3');
+					variableTitle.innerText = 'Variables';
+				
+					const list = document.createElement('ul');
+					list.id = 'variable-list-' + promptId;
+				
+					right.appendChild(variableTitle);
+					right.appendChild(list);
+					right.appendChild(variableContainer);
 				
 					section.appendChild(titleLabel);
 					section.appendChild(titleInput);
@@ -294,9 +389,17 @@ function getWebviewContent(): string {
 					wrapper.appendChild(right);
 				
 					promptContainer.appendChild(wrapper);
+					handleVariableInputs(inputText, variableContainerId, tokenCountElement);
 				}
 						
-				
+				document.addEventListener('DOMContentLoaded', () => {
+					vscodeApi.postMessage({ command: 'webviewReady' });
+					setTimeout(() => {
+						if (!hasPreloadedPrompts) {
+							createPromptSection();
+						}
+					}, 100);
+				});
 
                 document.getElementById('addPrompt').addEventListener('click', () => {
                     createPromptSection();
@@ -319,11 +422,14 @@ function getWebviewContent(): string {
 							}
 							break;
 						}
+						case 'preloadPrompt': {
+							const { id, title, content, variables } = message.promptData;
+							createPromptSection(id, title, content, variables);
+							hasPreloadedPrompts = true; // Add this line
+							break;
+						}
 					}
 				});
-
-                // Create the initial prompt section
-                createPromptSection();
             </script>
         </body>
         </html>`;

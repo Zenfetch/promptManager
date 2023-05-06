@@ -52,6 +52,7 @@
     "typescript": "^5.0.4"
   },
   "dependencies": {
-    "gpt-3-encoder": "^1.1.4"
+    "gpt-3-encoder": "^1.1.4",
+    "protobufjs": "^7.2.3"
   }
 }
