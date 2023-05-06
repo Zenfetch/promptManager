@@ -13,6 +13,7 @@
     "type": "git",
     "url": "git@github.com:Zenfetch/promptManager.git"
   },
+  "publisher": "Zenfetch",
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
