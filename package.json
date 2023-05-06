@@ -9,6 +9,10 @@
   "categories": [
     "Other"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:Zenfetch/promptManager.git"
+  },
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
