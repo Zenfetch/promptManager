@@ -16,6 +16,10 @@ in a `generated_prompts` folder as protobuf files which can easily be read by yo
 
 Courtesy of Zenfetch
 
+## Upcoming features
+
+1. Group prompts into collections
+
 ### 1.0.0
 
 Initial release of PromptManager
