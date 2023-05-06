@@ -9,11 +9,18 @@
   "categories": [
     "Other"
   ],
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "homepage": "https://github.com/Zenfetch/promptManager/blob/main/README.md",
+  "bugs": {
+    "url": "https://github.com/Zenfetch/promptManager/issues",
+    "email": "gabe@zenfetch.com"
+  },
   "repository": {
     "type": "git",
-    "url": "git@github.com:Zenfetch/promptManager.git"
+    "url": "https://github.com/Zenfetch/promptManager.git"
   },
   "publisher": "Zenfetch",
+  "icon": "icon.png",
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
