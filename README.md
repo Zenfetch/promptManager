@@ -8,7 +8,7 @@ in a `generated_prompts` folder as protobuf files which can easily be read by yo
 Open up your command pallette in VSCode and type `Show Prompt Manager UI`. This will immediately create a `generated_prompts` directory
 which will house the `prompt.proto` file along with any prompts you create using the extension. When you `Save` a prompt, the prompt is 
 stored as a `.pb` file which can be read in your code using the protobuf library. Below is the Prompt schema along with example code to 
-read the prompts for Python.
+read the prompts for Python. Make sure you have protobuf installed on your machine.
 
 ### Protobuf Schema
 
@@ -32,12 +32,13 @@ message Prompt {
 
 2. Compile the `prompt.proto` file to generate the Python module. This takes place after you have saved a prompt: 
 
-`protoc --python_out=generated_prompts/prompt.proto` 
+`protoc --python_out=. <path_to_prompt.proto>` 
 
-3. Now, you should have a `prompt_pb2.py` file. You can use this module to read the .pb files. Here's a Python code snippet as an example:
+3. Now, you should have a `prompt_pb2.py` file in the same directory as your `prompt.proto`. You can use this module to read the .pb files. 
+Here's a Python code snippet as an example:
 
 ```python
-import prompt_pb2 # Assuming file name is 
+import prompt_pb2
 import os
 
 def read_prompt_file(file_path):
