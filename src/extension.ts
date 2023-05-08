@@ -42,10 +42,23 @@ export function activate(context: vscode.ExtensionContext) {
 			undefined,
 			context.subscriptions
 		);
+
+		  // Call ensureProtoFileExists in the activate function
+		  const workspaceFolders = vscode.workspace.workspaceFolders;
+		  if (workspaceFolders && workspaceFolders.length > 0) {
+			const generatedPromptsPath = path.join(
+			  workspaceFolders[0].uri.fsPath,
+			  "generated_prompts"
+			);
+			if (!fs.existsSync(generatedPromptsPath)) {
+			  fs.mkdirSync(generatedPromptsPath);
+			}
+			ensureProtoFileExists(generatedPromptsPath);
+		  } else {
+			vscode.window.showErrorMessage("No workspace folder found");
+		  }
 			
 		panel.webview.html = getWebviewContent();
-
-		// loadExistingPrompts(panel); // Add this line
 		
     }));
 
@@ -53,6 +66,24 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage('Hello from promptManager!');
     }));
 }
+
+async function ensureProtoFileExists(generatedPromptsPath: string) {
+	const protoFilePath = path.join(generatedPromptsPath, "prompt.proto");
+  
+	if (!fs.existsSync(protoFilePath)) {
+	  const protoContent = `syntax = "proto3";
+  
+message Prompt {
+	string id = 1;
+	string title = 2;
+	string content = 3;
+	repeated string variables = 4;
+	int32 tokenCount = 5;
+}
+`;
+	  fs.writeFileSync(protoFilePath, protoContent);
+	}
+  }
 
 async function deletePromptFile(promptId: string) {
     const workspaceFolders = vscode.workspace.workspaceFolders;
