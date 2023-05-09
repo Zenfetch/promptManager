@@ -3,8 +3,11 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as util from 'util';
 import {load, Root, Type} from 'protobufjs';
 const {encode} = require('gpt-3-encoder');
+
+const copyFile = util.promisify(fs.copyFile);
 
 export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(vscode.commands.registerCommand('promptmanager.showUI', () => {
@@ -43,20 +46,20 @@ export function activate(context: vscode.ExtensionContext) {
 			context.subscriptions
 		);
 
-		  // Call ensureProtoFileExists in the activate function
-		  const workspaceFolders = vscode.workspace.workspaceFolders;
-		  if (workspaceFolders && workspaceFolders.length > 0) {
-			const generatedPromptsPath = path.join(
-			  workspaceFolders[0].uri.fsPath,
-			  "generated_prompts"
-			);
-			if (!fs.existsSync(generatedPromptsPath)) {
-			  fs.mkdirSync(generatedPromptsPath);
-			}
-			ensureProtoFileExists(generatedPromptsPath);
-		  } else {
-			vscode.window.showErrorMessage("No workspace folder found");
-		  }
+		// Call ensureProtoFileExists in the activate function
+		const workspaceFolders = vscode.workspace.workspaceFolders;
+		if (workspaceFolders && workspaceFolders.length > 0) {
+		const generatedPromptsPath = path.join(
+			workspaceFolders[0].uri.fsPath,
+			getGeneratedPromptsPath()
+		);
+		if (!fs.existsSync(generatedPromptsPath)) {
+			fs.mkdirSync(generatedPromptsPath);
+		}
+		ensureProtoFileExists(generatedPromptsPath);
+		} else {
+		vscode.window.showErrorMessage("No workspace folder found");
+		}
 			
 		panel.webview.html = getWebviewContent();
 		
@@ -67,28 +70,34 @@ export function activate(context: vscode.ExtensionContext) {
     }));
 }
 
+function getGeneratedPromptsPath(): string {
+	const config = vscode.workspace.getConfiguration('promptManager');
+	const defaultPath = 'generated_prompts';
+	const customPath = config.get<string>('generatedPromptsPath', defaultPath);
+	return customPath;
+}
+
 async function ensureProtoFileExists(generatedPromptsPath: string) {
 	const protoFilePath = path.join(generatedPromptsPath, "prompt.proto");
   
 	if (!fs.existsSync(protoFilePath)) {
-	  const protoContent = `syntax = "proto3";
+	  // Get the path of the prompt.proto file in the resources folder
+	  const resourcesProtoPath = path.join(__dirname, '..', 'resources', 'prompt.proto');
   
-message Prompt {
-	string id = 1;
-	string title = 2;
-	string content = 3;
-	repeated string variables = 4;
-	int32 tokenCount = 5;
-}
-`;
-	  fs.writeFileSync(protoFilePath, protoContent);
+	  // Copy the prompt.proto file from resources to the generatedPromptsPath
+	  try {
+		await copyFile(resourcesProtoPath, protoFilePath);
+	  } catch (error) {
+		const errorMessage = (error as Error)?.message || 'Unknown error';
+		vscode.window.showErrorMessage('Error copying prompt.proto file: ' + errorMessage);
+	  }
 	}
   }
 
 async function deletePromptFile(promptId: string) {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders && workspaceFolders.length > 0) {
-        const generatedPromptsPath = path.join(workspaceFolders[0].uri.fsPath, 'generated_prompts');
+		const generatedPromptsPath = path.join(workspaceFolders[0].uri.fsPath, getGeneratedPromptsPath());
         if (fs.existsSync(generatedPromptsPath)) {
             const filePath = path.join(generatedPromptsPath, `${promptId}.pb`);
             if (fs.existsSync(filePath)) {
@@ -110,7 +119,8 @@ async function deletePromptFile(promptId: string) {
 async function loadExistingPrompts(panel: vscode.WebviewPanel) {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders && workspaceFolders.length > 0) {
-        const generatedPromptsPath = path.join(workspaceFolders[0].uri.fsPath, 'generated_prompts');
+        // Use the getGeneratedPromptsPath() function here
+        const generatedPromptsPath = path.join(workspaceFolders[0].uri.fsPath, getGeneratedPromptsPath());
         if (fs.existsSync(generatedPromptsPath)) {
             const protoPath = path.join(__dirname, '..', 'resources', 'prompt.proto');
             const root = await load(protoPath);
@@ -174,7 +184,7 @@ async function saveProtobufFile(promptId: string, title: string, input: string, 
         title: title,
         content: input,
         variables: variableNames,
-		tokenCount: tokenCount
+        tokenCount: tokenCount
     };
 
     const errMsg = promptType.verify(payload);
@@ -187,13 +197,13 @@ async function saveProtobufFile(promptId: string, title: string, input: string, 
 
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders && workspaceFolders.length > 0) {
-        const generatedPromptsPath = path.join(workspaceFolders[0].uri.fsPath, 'generated_prompts');
+        const generatedPromptsPath = path.join(workspaceFolders[0].uri.fsPath, getGeneratedPromptsPath());
         if (!fs.existsSync(generatedPromptsPath)) {
-			console.log('Created a new folder for the generatedPromptsPath');
+            console.log('Created a new folder for the generatedPromptsPath');
             fs.mkdirSync(generatedPromptsPath);
         }
 
-		console.log('Writing the prompt proto!');
+        console.log('Writing the prompt proto!');
         fs.writeFileSync(path.join(generatedPromptsPath, `${promptId}.pb`), buffer);
     } else {
         vscode.window.showErrorMessage('No workspace folder found');

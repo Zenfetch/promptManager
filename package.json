@@ -24,6 +24,18 @@
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
+    "configuration": [
+      {
+        "title": "Prompt Manager",
+        "properties": {
+          "promptManager.generatedPromptsPath": {
+            "type": "string",
+            "default": "generated_prompts",
+            "description": "Path to store generated prompts"
+          }
+        }
+      }
+    ],
     "commands": [
       {
         "command": "promptmanager.showUI",
