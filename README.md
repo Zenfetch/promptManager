@@ -5,10 +5,10 @@ in a `generated_prompts` folder as protobuf files which can easily be read by yo
 
 ## How to use
 
-Open up your command pallette in VSCode and type `Show Prompt Manager UI`. This will immediately create a `generated_prompts` directory
-which will house the `prompt.proto` file along with any prompts you create using the extension. When you `Save` a prompt, the prompt is 
-stored as a `.pb` file which can be read in your code using the protobuf library. Below is the Prompt schema along with example code to 
-read the prompts for Python. Make sure you have protobuf installed on your machine.
+Open up your command pallette in VSCode (⌘⇧P on Mac) and type `Show Prompt Manager UI`. This will immediately create a `generated_prompts` directory
+which will house the `prompt.proto` file along with any prompts you create using the extension. You can configure the `generated_prompts` path in 
+the extension settings (⌘, on Mac). When you `Save` a prompt, it is stored as a `.pb` file which can be read in your code using the protobuf library. 
+Below is the Prompt schema along with example code to read the prompts for Python. Make sure you have protobuf installed on your machine.
 
 ### Protobuf Schema
 
