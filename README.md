@@ -1,4 +1,4 @@
-# promptmanager README
+# Welcome to PromptManager
 
 PromptManager allows you to define your prompts in a simple UI directly in VSCode. These prompts are then saved
 in a `generated_prompts` folder as protobuf files which can easily be read by your preferred programming language.
